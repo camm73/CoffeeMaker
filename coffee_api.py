@@ -1,4 +1,5 @@
 from flask_api import FlaskAPI, status
+from flask import request
 from coffee_controller import CoffeeController
 import threading
 import logging

@@ -8,6 +8,7 @@ logging.basicConfig(level=logging.INFO)
 class CoffeeController():
     def __init__(self, control_pin=4):
         self.CONTROL_PIN = control_pin
+        self.on = False
 
         # Setup gpio pins before use
         self.configure_gpio()
@@ -26,17 +27,23 @@ class CoffeeController():
     def turn_on(self):
         logging.info(f"Turning on coffee maker at: {time.time()}")
         gpio.output(self.CONTROL_PIN, gpio.HIGH)
+        self.on = True
 
     # Active low to disable relay
     def turn_off(self):
         logging.info(f"Turning off coffee maker at {time.time()}")
         gpio.output(self.CONTROL_PIN, gpio.LOW)
+        self.on = False
 
     # TODO: Temporary run configuration; should be non-blocking
     def start_coffee(self, minutes=60):
         self.turn_on()
         time.sleep(minutes * 60)
         self.turn_off()
+
+    # Check whether coffee maker is on
+    def is_on(self):
+        return self.on
 
     # Makes sure all gpios are cleaned up before exit
     def cleanup(self):
