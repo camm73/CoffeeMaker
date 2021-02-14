@@ -17,7 +17,7 @@ class CoffeeController():
         logging.info("Configuring GPIO pins")
         gpio.setmode(gpio.BCM)
         gpio.setup(self.CONTROL_PIN, gpio.OUT)
-        gpio.output(self.CONTROL_PIN, gpio.HIGH)
+        gpio.output(self.CONTROL_PIN, gpio.LOW)
         
         # Make sure cleanup is called at exit
         atexit.register(self.cleanup)
