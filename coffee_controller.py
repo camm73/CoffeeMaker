@@ -47,5 +47,5 @@ class CoffeeController():
 if __name__ == "__main__":
     controller = CoffeeController()
     controller.turn_on()
-    time.sleep(4)
+    time.sleep(3)
     controller.turn_off()
