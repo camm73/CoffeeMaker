@@ -43,9 +43,11 @@ class CoffeeController():
         logging.info("Cleaning up GPIO pins")
         gpio.cleanup()
 
+'''
 # TODO: REMOVE
 if __name__ == "__main__":
     controller = CoffeeController()
     controller.turn_on()
     time.sleep(3)
     controller.turn_off()
+'''
