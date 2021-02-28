@@ -2,8 +2,11 @@ from bluezero import peripheral
 from bluezero import adapter
 import logging
 import threading
+import time
+import sys
+import re
+from controller_utils import set_wifi_network
 
-logging.basicConfig(level=logging.INFO)
 # WIFI Service
 SERVICE_UUID = 'ed61f1ee-b500-472f-b522-5f7b30177c46'
 
@@ -16,6 +19,7 @@ class CoffeeWifiSetupServer():
     def __init__(self):
         self._server_thread = None
         self._bluetooth_addr = self._get_bluetooth_addr()
+        self._running = False
 
         # Confirm that bluetooth address was received
         if self._bluetooth_addr is None:
@@ -34,14 +38,24 @@ class CoffeeWifiSetupServer():
             return None
 
     def _status_read_cb(self):
+        logging.info("READING")
         # TODO: Replace with check of wifi status
-        return [1]
+        return [5]
 
     def _status_notify_cb(self, notifying, characteristic):
         pass
 
-    def _wifi_details_write_cb(self, value):
-        print(f"Received: {bytes(value).decode('utf-8')}")
+    def _wifi_details_write_cb(self, value, options):
+        logging.info(f"Received: {bytes(value).decode('utf-8')}")
+        _r = r'ssid\/.*\/pass\/.*'
+        results = re.findall(_r, bytes(value).decode('utf-8'))
+        if(len(results)):
+            wifi_res = results[0].split('/')
+            if(wifi_res[0] == 'ssid' and wifi_res[2] == 'pass'):
+                ssid = wifi_res[1]
+                wifi_pass = wifi_res[3]
+                config_status = set_wifi_network(ssid, wifi_pass)
+                # TODO: Connect to wifi network
 
     # Create the BLE Peripheral and configures its services and characteristics
     def _run_service(self, address):
@@ -49,29 +63,26 @@ class CoffeeWifiSetupServer():
         wifi_service = peripheral.Peripheral(address, local_name='Coffee Maker WiFi Setup', appearance=1216)
 
         # Add service for setting up wifi
-        wifi_service.add_service(srv_id=1, uuid=SERVICE_UUID, primary=True)
-
-        # Add characteristic for checking wifi status
-        wifi_service.add_characteristic(srv_id=1, chr_id=1, uuid=STATUS_CHAR_ID, value=[0x00],
-                                        notifying=False, flags=['read', 'notify'],
-                                        read_callback=self._status_read_cb,
-                                        write_callback=None,
-                                        notify_callback=self._status_notify_cb
-                                        )
+        service_id = 1
+        wifi_service.add_service(srv_id=service_id, uuid=SERVICE_UUID, primary=True)
         
         # Add chrarateristic for receiving wifi details
-        wifi_service.add_characteristic(srv_id=1, chr_id=1, uuid=STREAM_CHAR_ID,
-                                        value=[], notifying=False,
-                                        flags=['write'],
-                                        read_callback=None,
-                                        write_callback=self._wifi_details_write_cb,
-                                        notify_callback=None
-                                        )
+        wifi_service.add_characteristic(srv_id=service_id, chr_id=1, uuid=STREAM_CHAR_ID, value=[], notifying=False, flags=['write'], read_callback=None, write_callback=self._wifi_details_write_cb, notify_callback=None)
+
+        # Add characteristic for checking wifi status
+        wifi_service.add_characteristic(srv_id=service_id, chr_id=2, uuid=STATUS_CHAR_ID, value=[0x00], notifying=False, flags=['read', 'notify'], read_callback=self._status_read_cb, write_callback=None, notify_callback=self._status_notify_cb)
+        
         # Start BLE Peripheral service
+        self._running = True
         wifi_service.publish()
+        logging.info("BLE WiFi server was successfully started!")
+
+        while self._running:
+            time.sleep(5)
 
     # Starts BLE WiFi setup server
     def start_server(self):
+        logging.info("Starting BLE WiFi setup server...")
         self._server_thread = threading.Thread(target=self._run_service, args=(self._bluetooth_addr,), daemon=True)
         self._server_thread.start()
         self._server_thread.join()
