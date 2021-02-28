@@ -5,7 +5,7 @@ import threading
 import time
 import sys
 import re
-from controller_utils import set_wifi_network
+from controller_utils import set_wifi_network, connect_to_network
 
 # WIFI Service
 SERVICE_UUID = 'ed61f1ee-b500-472f-b522-5f7b30177c46'
@@ -15,11 +15,17 @@ STATUS_CHAR_ID = 'ed61f1ee-b501-472f-b522-5f7b30177c46'
 # Wifi data stream characteristic
 STREAM_CHAR_ID = 'ed61f1ee-b502-472f-b522-5f7b30177c46'
 
+# STATUS VALUES
+READY = 0
+INVALID_INPUT = 1
+WIFI_ERROR = 2
+SUCCESS = 3
+
 class CoffeeWifiSetupServer():
     def __init__(self):
         self._server_thread = None
         self._bluetooth_addr = self._get_bluetooth_addr()
-        self._running = False
+        self._status = READY
 
         # Confirm that bluetooth address was received
         if self._bluetooth_addr is None:
@@ -38,13 +44,14 @@ class CoffeeWifiSetupServer():
             return None
 
     def _status_read_cb(self):
-        logging.info("READING")
-        # TODO: Replace with check of wifi status
-        return [5]
+        logging.info(f"Reading status value: {self._status}")
+        return [self._status]
 
+    # TODO: To be added in future
     def _status_notify_cb(self, notifying, characteristic):
         pass
 
+    # TODO: Sanitize input before adding to wpa_supplicant.conf
     def _wifi_details_write_cb(self, value, options):
         logging.info(f"Received: {bytes(value).decode('utf-8')}")
         _r = r'ssid\/.*\/pass\/.*'
@@ -55,12 +62,28 @@ class CoffeeWifiSetupServer():
                 ssid = wifi_res[1]
                 wifi_pass = wifi_res[3]
                 config_status = set_wifi_network(ssid, wifi_pass)
-                # TODO: Connect to wifi network
+                if not config_status:
+                    logging.error(f"Failed to set wifi network")
+                    return
+                time.sleep(0.5)
+                network_status = connect_to_network()
+
+                if not network_status:
+                    logging.error(f"Failed to connect to network")
+                    self._status = INVALID_INPUT
+                    return
+                else:
+                    logging.info("Successfully connected to network")
+                    self._status = SUCCESS
+                    sys.exit(0)
+        else:
+            logging.info("Invalid input received.")
+            self._status = INVALID_INPUT
 
     # Create the BLE Peripheral and configures its services and characteristics
-    def _run_service(self, address):
+    def run_service(self):
         # Configure Pi's bluetooth interface as BLE Peripheral
-        wifi_service = peripheral.Peripheral(address, local_name='Coffee Maker WiFi Setup', appearance=1216)
+        wifi_service = peripheral.Peripheral(self._bluetooth_addr, local_name='Coffee Maker WiFi Setup', appearance=1216)
 
         # Add service for setting up wifi
         service_id = 1
@@ -73,17 +96,5 @@ class CoffeeWifiSetupServer():
         wifi_service.add_characteristic(srv_id=service_id, chr_id=2, uuid=STATUS_CHAR_ID, value=[0x00], notifying=False, flags=['read', 'notify'], read_callback=self._status_read_cb, write_callback=None, notify_callback=self._status_notify_cb)
         
         # Start BLE Peripheral service
-        self._running = True
         wifi_service.publish()
-        logging.info("BLE WiFi server was successfully started!")
-
-        while self._running:
-            time.sleep(5)
-
-    # Starts BLE WiFi setup server
-    def start_server(self):
-        logging.info("Starting BLE WiFi setup server...")
-        self._server_thread = threading.Thread(target=self._run_service, args=(self._bluetooth_addr,), daemon=True)
-        self._server_thread.start()
-        self._server_thread.join()
 

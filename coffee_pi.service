@@ -1,0 +1,14 @@
+[Unit]
+Description=Coffee Pi Startup Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -u /home/pi/coffee_maker/coffee_main.py
+WorkingDirectory=/home/pi/coffee_maker
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
